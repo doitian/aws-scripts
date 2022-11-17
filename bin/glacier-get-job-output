@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -e
+set -u
+[ -n "${DEBUG:-}" ] && set -x || true
+
+usage() {
+  echo "Usage: $(basename $0) JOB_FILE"
+}
+
+if (($# > 0)); then
+  JOB_FILE="$1"
+else
+  usage
+  exit 1
+fi
+
+VAULT_NAME="$(jq -r '.vaultName' <"$JOB_FILE")"
+JOB_ID="$(jq -r '.jobId' <"$JOB_FILE")"
+
+JOB_STATUS="$(aws glacier describe-job --account-id - --vault-name "$VAULT_NAME" --job-id "$JOB_ID")"
+if [ "$(jq -r '.StatusCode' <<<"$JOB_STATUS")" = "Succeeded" ]; then
+  JOB_OUTPUT_FILE="$(mktemp -t $(basename $0))" || exit
+  trap 'rm -rf "$JOB_OUTPUT_FILE"; exit' ERR EXIT HUP INT TERM
+
+  aws glacier get-job-output --account-id - --vault-name "$VAULT_NAME" --job-id "$JOB_ID" "$JOB_OUTPUT_FILE" | jq
+  jq --arg vault "$VAULT_NAME" --arg job_id "$JOB_ID" '. + {vaultName: $vault, jobId: $job_id}' >"$JOB_FILE" <"$JOB_OUTPUT_FILE"
+fi
+jq <<<"$JOB_STATUS"

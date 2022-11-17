@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+set -e
+set -u
+[ -n "${DEBUG:-}" ] && set -x || true
+
+usage() {
+  echo "Usage: $(basename $0) -v VAULT -t TYPE JOB_FILE"
+}
+
+VAULT_NAME=
+JOB_TYPE=
+JOB_FILE=
+
+while getopts 'v:t:' opt; do
+  case "$opt" in
+    v)
+      VAULT_NAME="$OPTARG"
+      ;;
+    t)
+      JOB_TYPE="$OPTARG"
+      ;;
+    ":" | "?")
+      usage
+      exit 1
+      ;;
+  esac
+done
+shift "$(($OPTIND - 1))"
+
+if (( $# > 0 )); then
+  JOB_FILE="$1"
+  shift
+fi
+
+if [ -z "$VAULT_NAME" ] || [ -z "$JOB_TYPE" ] || [ -z "$JOB_FILE" ]; then
+  usage
+  exit 1
+fi
+
+JOB_PARAMETERS="$(jq --null-input --arg type "$JOB_TYPE" '{"Type": $type}')"
+
+aws glacier initiate-job --account-id - --vault-name "$VAULT_NAME" --job-parameters "$JOB_PARAMETERS" |
+  jq --arg vault "$VAULT_NAME" '. + {vaultName: $vault}' > "$JOB_FILE"
+
+jq < "$JOB_FILE"
