@@ -17,14 +17,14 @@ fi
 
 VAULT_NAME="$(jq -r '.vaultName' <"$JOB_FILE")"
 
-TOTAL_COUNT="$(jq '.ArchiveList[] | .ArchiveId' <"$JOB_FILE" | wc -l)"
+TOTAL_COUNT="$(echo $(jq '.ArchiveList[] | .ArchiveId' <"$JOB_FILE" | wc -l))"
 COUNT=1
 
-jq '.ArchiveList[] | .ArchiveId' <"$JOB_FILE" |
+jq -r '.ArchiveList[] | .ArchiveId' <"$JOB_FILE" |
   while IFS= read -r LINE; do
-    echo "${COUNT}/${TOTAL_COUNT} Deleting Archive $LINE"
-    aws glacier delete-archive --account-id - --vault-name "$VAULT_NAME" --archive-id="$LINE"
+    printf "%${#TOTAL_COUNT}s/%s Deleting Archive %s\n" "$COUNT" "$TOTAL_COUNT" "$LINE"
+    aws glacier delete-archive --account-id - --vault-name "$VAULT_NAME" --archive-id "$LINE"
     COUNT=$((COUNT + 1))
   done
 
-aws glacier delete-vault --vault-name "$VAULT_NAME" --account-id -
+echo "aws glacier delete-vault --vault-name \"$VAULT_NAME\" --account-id -"
